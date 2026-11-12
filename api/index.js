@@ -36,11 +36,34 @@ export default async function handler(req, res) {
   const search = url.search || "";
   const redirectTo = `${APP_SITE}${path}${search}`;
 
+  // 1. Perfiles (@username o /user/:id) con foto y nombre dinámicos
+  if (/^\/@[^/]+\/?$/.test(path) || /^\/user\/[^/]+\/?$/.test(path)) {
+    const endpoint = new URL(`${SUPABASE_URL}/functions/v1/profile-preview`);
+    const byUsername = path.startsWith("/@");
+    try {
+      const identity = decodeURIComponent(
+        byUsername ? path.slice(2).replace(/\/$/, "") : path.split("/")[2]
+      );
+      endpoint.searchParams.set(byUsername ? "username" : "id", identity);
+      const preview = await fetch(endpoint, {
+        headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (preview.ok) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "public, s-maxage=300");
+        return res.status(200).send(await preview.text());
+      }
+    } catch (e) {
+      // Si falla la consulta o no existe el perfil, continúa con la redirección genérica
+    }
+  }
+
   let title = "Zentro";
   let description = "Descubre y únete a los mejores eventos de vida social.";
   let image = DEFAULT_IMAGE;
 
-  // Extraer slug de /e/:slug o /event/:id
+  // 2. Extraer slug de /e/:slug o /event/:id
   const eventMatch = path.match(/^\/(?:e|event)\/([^/?#]+)/);
   if (eventMatch) {
     const identifier = decodeURIComponent(eventMatch[1]);

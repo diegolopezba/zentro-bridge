@@ -59,11 +59,36 @@ export default async function handler(req, res) {
     }
   }
 
+  // 2. Invitaciones especiales VIP (/i/:token o /i/:alias)
+  if (/^\/i\/[^/]+\/?$/.test(path)) {
+    const endpoint = new URL(`${SUPABASE_URL}/functions/v1/invite-preview`);
+    try {
+      const identity = decodeURIComponent(path.split("/")[2]);
+      if (!/^[a-zA-Z0-9_-]{16,180}$/.test(identity)) {
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(400).send("Invalid invitation");
+      }
+      endpoint.searchParams.set("token", identity);
+      const preview = await fetch(endpoint, {
+        headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Referrer-Policy", "no-referrer");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+      return res.status(preview.status).send(await preview.text());
+    } catch (e) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(503).send("Invitation preview temporarily unavailable");
+    }
+  }
+
   let title = "Zentro";
   let description = "Descubre y únete a los mejores eventos de vida social.";
   let image = DEFAULT_IMAGE;
 
-  // 2. Extraer slug de /e/:slug o /event/:id
+  // 3. Extraer slug de /e/:slug o /event/:id
   const eventMatch = path.match(/^\/(?:e|event)\/([^/?#]+)/);
   if (eventMatch) {
     const identifier = decodeURIComponent(eventMatch[1]);
